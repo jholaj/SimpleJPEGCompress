@@ -54,7 +54,6 @@ class HuffmanTree {
     }
 
 public:
-    // Funkce pro zakódování symbolů a jejich frekvencí
     map<int, string> encode(int data[], int freq[], int size) {
         Node *left, *right, *top;
 
@@ -87,9 +86,9 @@ public:
         map<int, string> huffmanCodes;
         generateCodes(root, "", huffmanCodes);
 
-        cout << "Obsah huffmanCodes:" << endl;
+        cout << "huffmanCodes content:" << endl;
         for (const auto& pair : huffmanCodes) {
-            cout << "Symbol: " << pair.first << ", Kód: " << pair.second << endl;
+            cout << "Symbol: " << pair.first << ", Code: " << pair.second << endl;
         }
 
         return huffmanCodes;
@@ -162,7 +161,7 @@ public:
             file.seekg(padding, std::ios::cur);
         }
         file.close();
-        saveImage("loaded_picture.bmp", pixels);
+        saveImage("01_TEST_LOADED_PICTURE.bmp", pixels);
     }
 
     void saveImage(const std::string &filename, const std::vector<std::vector<std::array<int, 3>>> &image) {
@@ -264,23 +263,22 @@ public:
                 int Cb = 128 - 0.168736 * R - 0.331264 * G + 0.5 * B;
                 int Cr = 128 + 0.5 * R - 0.418688 * G - 0.081312 * B;
 
-                pixels[y][x] = {Y, Cb, Cr};  // Uložení ve formátu YCbCr
+                pixels[y][x] = {Y, Cb, Cr};
             }
         }
-        saveImage("ycbcr.bmp", pixels);
+        saveImage("02_TEST_TO_YCBCR.bmp", pixels);
     }
 
-    // Shifting pixel values from [0 - 255] to [-128 - 127]
     void shiftPixelValues() {
         cout << "SHIFTING PIXEL VALUES..." << endl;
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
-                pixels[y][x][0] -= 128; // just needs substracting 128 from Y, Cb, Cr
+                pixels[y][x][0] -= 128; // just needs substracting 128 from R,G,B
                 pixels[y][x][1] -= 128;
                 pixels[y][x][2] -= 128;
             }
         }
-        saveImage("shifting.bmp", pixels); 
+        saveImage("03_TEST_SHIFTING.bmp", pixels); 
     }
 
     // Discrete Cosine Transform on each block 
@@ -329,6 +327,8 @@ public:
             }
             dctBlocks.push_back(dctBlock);
         }
+        auto image = combineBlocks(dctBlocks);
+        saveImage("04_TEST_DCT.bmp", image);
         return dctBlocks;
     }
 
@@ -381,6 +381,9 @@ public:
                 }
             }
         }
+
+        auto img = combineBlocks(quantizedBlocks);
+        saveImage("05_TEST_QUANT.bmp", img);
 
         return quantizedBlocks;
 
@@ -438,7 +441,7 @@ public:
                 // y position in block
                 for (int y = 0; y < 8; ++y) {
 
-                    double sumR = 0.0, sumG = 0.0, sumB = 0.0;
+                    double sumY = 0.0, sumCb = 0.0, sumCr = 0.0;
 
                     // u frequency
                     for (int u = 0; u < 8; ++u) {
@@ -450,32 +453,33 @@ public:
                             double cosineX = cos((2 * x + 1) * u * M_PI / 16.0);
                             double cosineY = cos((2 * y + 1) * v * M_PI / 16.0);
 
-                            double dctValueR = dctBlock[u][v][0];
-                            double dctValueG = dctBlock[u][v][1];
-                            double dctValueB = dctBlock[u][v][2];
+                            double dctValueY = dctBlock[u][v][0];
+                            double dctValueCb = dctBlock[u][v][1];
+                            double dctValueCr = dctBlock[u][v][2];
 
-                            sumR += Cu * Cv * dctValueR * cosineX * cosineY;
-                            sumG += Cu * Cv * dctValueG * cosineX * cosineY;
-                            sumB += Cu * Cv * dctValueB * cosineX * cosineY;
+                            sumY += Cu * Cv * dctValueY * cosineX * cosineY;
+                            sumCb += Cu * Cv * dctValueCb * cosineX * cosineY;
+                            sumCr += Cu * Cv * dctValueCr * cosineX * cosineY;
                         }
                     }
 
                     // Discretization and rounding
-                    int R = static_cast<int>(sumR);
-                    int G = static_cast<int>(sumG);
-                    int B = static_cast<int>(sumB);
+                    int Y = static_cast<int>(sumY);
+                    int Cb = static_cast<int>(sumCb);
+                    int Cr = static_cast<int>(sumCr);
 
-                    // Clipping to [0, 255] range
-                    R = max(0, min(255, R));
-                    G = max(0, min(255, G));
-                    B = max(0, min(255, B));
+                    Y = max(0, min(255, Y));
+                    Cb = max(0, min(255, Cb));
+                    Cr = max(0, min(255, Cr));
 
-                    // Saving computed RGB values to block
-                    block[y][x] = {R, G, B};
+                    // Saving computed YCbCr values to block
+                    block[y][x] = {Y, Cb, Cr};
                 }
             }
             blocks.push_back(block);
         }
+        auto img = combineBlocks(blocks);
+        saveImage("06_TEST_IDCT.bmp", img);
         return blocks;
     }
 
@@ -484,13 +488,14 @@ public:
         for (auto &block : blocks) {
             for (auto &row : block) {
                 for (auto &pixel : row) {
-                    // Add 128 to each component to shift back to [0, 255] range
                     pixel[0] += 128; // Y component
-                    pixel[1] += 128; // Cb component
-                    pixel[2] += 128; // Cr component
+                    //cout << " Y: " << pixel[0]<< " Cb: " << pixel[1] << " Cr: " << pixel[2];
                 }
             }
         }
+
+        auto img = combineBlocks(blocks);
+        saveImage("07_TEST_SHIFTING_BACK.bmp", img);
 
         return blocks;
     }
@@ -517,14 +522,13 @@ public:
                     int G = Y - 0.344136 * (Cb - 128) - 0.714136 * (Cr - 128);
                     int B = Y + 1.772 * (Cb - 128);
 
-                    R = max(0, min(255, R));
-                    G = max(0, min(255, G));
-                    B = max(0, min(255, B));
-
                     blocksRGB[i][j][k] = {R, G, B};
                 }
             }
         }
+
+        auto img = combineBlocks(blocksRGB);
+        saveImage("08_TEST_TO_RGB.bmp", img);
 
         return blocksRGB;
     }
@@ -578,6 +582,7 @@ public:
             }
         }
 
+
         cout << "APPLYING INVERSE DCT..." << endl;
         // Apply inverse DCT on blocks
         auto idctBlocks = applyIDCT(blocks);
@@ -585,6 +590,7 @@ public:
         cout << "SHIFTING PIXEL VALUES BACK..." << endl;
         // Shift pixel values back
         auto shiftedBlocks = shiftPixelValuesBack(idctBlocks);
+
 
         cout << "CONVERTING YCbCr BACK TO RGB..." << endl;
         // Convert YCbCr back to RGB
@@ -594,8 +600,9 @@ public:
         // Combine blocks back to image
         auto image = combineBlocks(rgbBlocks);
 
+        // same as to rgb image
         cout << "SAVING RECONSTRUCTED IMAGE..." << endl;
-        saveImage("reconstructed_image.bmp", image);
+        saveImage("09_TEST_FINAL_IMAGE.bmp", image);
     }
 };
 
