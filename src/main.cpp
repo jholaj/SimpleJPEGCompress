@@ -260,16 +260,11 @@ public:
 
                 //cout << R << endl;
 
-                double Y = 16 +  ( 0.257 * R + 0.504 * G + 0.098 * B);
-                double Cb = 128 + (-0.148 * R - 0.291 * G + 0.439 * B);
-                double Cr = 128 + ( 0.439 * R - 0.368 * G - 0.071 * B);
+                int Y = 0.299 * R + 0.587 * G + 0.114 * B;
+                int Cb = 128 - 0.168736 * R - 0.331264 * G + 0.5 * B;
+                int Cr = 128 + 0.5 * R - 0.418688 * G - 0.081312 * B;
 
-                // Oříznutí hodnot do rozsahu 0-255
-                Y = max(0.0, min(255.0, Y));
-                Cb = max(0.0, min(255.0, Cb));
-                Cr = max(0.0, min(255.0, Cr));
-
-                pixels[y][x] = {static_cast<int>(Y), static_cast<int>(Cb), static_cast<int>(Cr)};  // Uložení ve formátu YCbCr
+                pixels[y][x] = {Y, Cb, Cr};  // Uložení ve formátu YCbCr
             }
         }
         saveImage("ycbcr.bmp", pixels);
