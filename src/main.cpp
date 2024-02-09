@@ -6,6 +6,10 @@
 #include <queue>
 #include <map>
 
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
+
 using namespace std;
 
 // https://arxiv.org/ftp/arxiv/papers/1405/1405.6147.pdf
@@ -156,12 +160,11 @@ public:
                 unsigned char colors[3];
                 file.read(reinterpret_cast<char*>(colors), 3);
                 pixels[y][x] = {colors[0], colors[2], colors[1]};
-                //cout << static_cast<int>(colors[2]) << " " << static_cast<int>(colors[1]) << " " << static_cast<int>(colors[0]) << endl;
             }
             file.seekg(padding, std::ios::cur);
         }
         file.close();
-        saveImage("01_TEST_LOADED_PICTURE.bmp", pixels);
+        saveImage("../OUTPUT/01_TEST_LOADED_PICTURE.bmp", pixels);
     }
 
     void saveImage(const std::string &filename, const std::vector<std::vector<std::array<int, 3>>> &image) {
@@ -178,7 +181,6 @@ public:
 
         // BMP header
         const int fileSize = 54 + (3 * width + padding) * height;
-        cout << "COMPRESSED SIZE: " << fileSize << endl;
         const int dataOffset = 54;
 
         unsigned char header[54] = {
@@ -221,7 +223,7 @@ public:
     }
 
     // Dividing into 8x8 blocks
-    vector<vector<vector<array<int, 3>>>> divideIntoBlocks() {
+    vector<vector<vector<array<int, 3>>>> divideIntoBlocks(vector<vector<array<int, 3>>> pixels) {
         
         vector<vector<vector<array<int, 3>>>> blocks; 
         cout << "DIVIDING INTO BLOCKS..." << endl;
@@ -249,36 +251,38 @@ public:
         return blocks;
     }
 
-    // Converting to YCbCr
-   void convertToYCbCr() {
+    vector<vector<array<int, 3>>> convertToYCbCr() {        
+        vector<vector<array<int, 3>>> yCbCrPixels = pixels;
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
-                int R = pixels[y][x][0];
+                int R = pixels[y][x][2];
                 int G = pixels[y][x][1];
-                int B = pixels[y][x][2];
-
-                //cout << R << endl;
+                int B = pixels[y][x][0];
 
                 int Y = 0.299 * R + 0.587 * G + 0.114 * B;
                 int Cb = 128 - 0.168736 * R - 0.331264 * G + 0.5 * B;
                 int Cr = 128 + 0.5 * R - 0.418688 * G - 0.081312 * B;
 
-                pixels[y][x] = {Y, Cb, Cr};
+                yCbCrPixels[y][x] = {Y, Cb, Cr};
             }
         }
-        saveImage("02_TEST_TO_YCBCR.bmp", pixels);
+
+        saveImage("../OUTPUT/02_TEST_TO_YCBCR.bmp", yCbCrPixels);
+
+        return yCbCrPixels;
     }
 
-    void shiftPixelValues() {
+    vector<vector<array<int, 3>>> shiftPixelValues(const vector<vector<array<int, 3>>> &pixels) {
         cout << "SHIFTING PIXEL VALUES..." << endl;
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                pixels[y][x][0] -= 128; // just needs substracting 128 from R,G,B
-                pixels[y][x][1] -= 128;
-                pixels[y][x][2] -= 128;
+        vector<vector<array<int, 3>>> shiftedImage = pixels;
+        for (int y = 0; y < shiftedImage.size(); ++y) {
+            for (int x = 0; x < shiftedImage[y].size(); ++x) {
+                shiftedImage[y][x][0] -= 128; // Y
             }
         }
-        saveImage("03_TEST_SHIFTING.bmp", pixels); 
+
+        saveImage("../OUTPUT/03_TEST_SHIFTING.bmp",shiftedImage); 
+        return shiftedImage;
     }
 
     // Discrete Cosine Transform on each block 
@@ -328,7 +332,7 @@ public:
             dctBlocks.push_back(dctBlock);
         }
         auto image = combineBlocks(dctBlocks);
-        saveImage("04_TEST_DCT.bmp", image);
+        saveImage("../OUTPUT/04_TEST_DCT.bmp", image);
         return dctBlocks;
     }
 
@@ -383,12 +387,11 @@ public:
         }
 
         auto img = combineBlocks(quantizedBlocks);
-        saveImage("05_TEST_QUANT.bmp", img);
+        saveImage("../OUTPUT/05_TEST_QUANT.bmp", img);
 
         return quantizedBlocks;
 
     }
-
 
     map<int, string> huffmanEncoding(vector<vector<vector<array<int, 3>>>> &blocks) {
         cout << "HUFFMAN ENCODING..." << endl;
@@ -406,8 +409,6 @@ public:
                     int Y = block[y][x][0];
                     int Cb = block[y][x][1];
                     int Cr = block[y][x][2];
-
-                    //cout << "Y: " << Y << ", Cb: " << Cb << ", Cr: " << Cr << endl;
 
                     // Increase frequency count
                     freq[Y]++;
@@ -453,9 +454,9 @@ public:
                             double cosineX = cos((2 * x + 1) * u * M_PI / 16.0);
                             double cosineY = cos((2 * y + 1) * v * M_PI / 16.0);
 
-                            double dctValueY = dctBlock[u][v][0];
-                            double dctValueCb = dctBlock[u][v][1];
-                            double dctValueCr = dctBlock[u][v][2];
+                            double dctValueY = dctBlock[v][u][0];
+                            double dctValueCb = dctBlock[v][u][1];
+                            double dctValueCr = dctBlock[v][u][2];
 
                             sumY += Cu * Cv * dctValueY * cosineX * cosineY;
                             sumCb += Cu * Cv * dctValueCb * cosineX * cosineY;
@@ -468,9 +469,9 @@ public:
                     int Cb = static_cast<int>(sumCb);
                     int Cr = static_cast<int>(sumCr);
 
-                    Y = max(0, min(255, Y));
-                    Cb = max(0, min(255, Cb));
-                    Cr = max(0, min(255, Cr));
+                    Y = max(16, min(235, Y));
+                    Cb = max(16, min(240, Cb));
+                    Cr = max(16, min(240, Cr));
 
                     // Saving computed YCbCr values to block
                     block[y][x] = {Y, Cb, Cr};
@@ -479,23 +480,23 @@ public:
             blocks.push_back(block);
         }
         auto img = combineBlocks(blocks);
-        saveImage("06_TEST_IDCT.bmp", img);
+        saveImage("../OUTPUT/06_TEST_IDCT.bmp", img);
         return blocks;
     }
 
-
+    // shifting rgb channels instead of ycbcr?
     vector<vector<vector<array<int, 3>>>> shiftPixelValuesBack(vector<vector<vector<array<int, 3>>>> &blocks) {
         for (auto &block : blocks) {
             for (auto &row : block) {
                 for (auto &pixel : row) {
-                    pixel[0] += 128; // Y component
+                    pixel[0] += 128;
                     //cout << " Y: " << pixel[0]<< " Cb: " << pixel[1] << " Cr: " << pixel[2];
                 }
             }
         }
 
         auto img = combineBlocks(blocks);
-        saveImage("07_TEST_SHIFTING_BACK.bmp", img);
+        saveImage("../OUTPUT/07_TEST_SHIFTING_BACK.bmp", img);
 
         return blocks;
     }
@@ -503,17 +504,17 @@ public:
     vector<vector<vector<array<int, 3>>>> convertYCbCrToRGB(const vector<vector<vector<array<int, 3>>>>& blocksYCbCr) {
         // Create blocksRGB with the same structure as blocksYCbCr
         vector<vector<vector<array<int, 3>>>> blocksRGB(blocksYCbCr.size());
-        for (size_t i = 0; i < blocksYCbCr.size(); ++i) {
+        for (int i = 0; i < blocksYCbCr.size(); ++i) {
             blocksRGB[i].resize(blocksYCbCr[i].size());
-            for (size_t j = 0; j < blocksYCbCr[i].size(); ++j) {
+            for (int j = 0; j < blocksYCbCr[i].size(); ++j) {
                 blocksRGB[i][j].resize(blocksYCbCr[i][j].size());
             }
         }
 
         // Convert YCbCr to RGB
-        for (size_t i = 0; i < blocksYCbCr.size(); ++i) {
-            for (size_t j = 0; j < blocksYCbCr[i].size(); ++j) {
-                for (size_t k = 0; k < blocksYCbCr[i][j].size(); ++k) {
+        for (int i = 0; i < blocksYCbCr.size(); ++i) {
+            for (int j = 0; j < blocksYCbCr[i].size(); ++j) {
+                for (int k = 0; k < blocksYCbCr[i][j].size(); ++k) {
                     int Y = blocksYCbCr[i][j][k][0];
                     int Cb = blocksYCbCr[i][j][k][1];
                     int Cr = blocksYCbCr[i][j][k][2];
@@ -522,13 +523,17 @@ public:
                     int G = Y - 0.344136 * (Cb - 128) - 0.714136 * (Cr - 128);
                     int B = Y + 1.772 * (Cb - 128);
 
+                    R = std::max(0, std::min(255, R));
+                    G = std::max(0, std::min(255, G));
+                    B = std::max(0, std::min(255, B));
+
                     blocksRGB[i][j][k] = {R, G, B};
                 }
             }
         }
 
         auto img = combineBlocks(blocksRGB);
-        saveImage("08_TEST_TO_RGB.bmp", img);
+        saveImage("../OUTPUT/08_TEST_TO_RGB.bmp", img);
 
         return blocksRGB;
     }
@@ -540,8 +545,8 @@ public:
         for (int i = 0; i < height; i += 8) {
             for (int j = 0; j < width; j += 8) {
                 const auto& block = blocks[blockIndex];
-                for (size_t y = 0; y < block.size(); ++y) {
-                    for (size_t x = 0; x < block[y].size(); ++x) {
+                for (int y = 0; y < block.size(); ++y) {
+                    for (int x = 0; x < block[y].size(); ++x) {
                         combinedImage[i + y][j + x] = block[y][x];
                     }
                 }
@@ -551,11 +556,9 @@ public:
 
         return combinedImage;
     }
-
-
-
+    
     // Compressed image is reconstructed through reverse process (IDCT)
-    void reconstructImage(vector<vector<vector<array<int, 3>>>> &blocks, map<int, string> &huffmanCodes) {
+    vector<vector<vector<array<int, 3>>>> reconstructImage(vector<vector<vector<array<int, 3>>>> &blocks, map<int, string> &huffmanCodes) {
         cout << "RECONSTRUCTING IMAGE..." << endl;
 
         // Create an instance of Huffman Tree
@@ -602,19 +605,26 @@ public:
 
         // same as to rgb image
         cout << "SAVING RECONSTRUCTED IMAGE..." << endl;
-        saveImage("09_TEST_FINAL_IMAGE.bmp", image);
+        return rgbBlocks;
     }
 };
 
 int main() {
-    Image img("sample_soho.bmp");
-    img.convertToYCbCr();
-    img.shiftPixelValues();
-    auto blocks = img.divideIntoBlocks();
+    Image img = Image("../INPUT/sample_soho.bmp");
+    auto ycbcr = img.convertToYCbCr();
+    auto shift = img.shiftPixelValues(ycbcr);
+    auto blocks = img.divideIntoBlocks(shift);
     auto dctBlocks = img.applyDCT(blocks);
     auto quantizedBlocks = img.quantize(dctBlocks);
     map<int, string> huffmanCodes = img.huffmanEncoding(quantizedBlocks);
-    img.reconstructImage(quantizedBlocks,huffmanCodes);
+    auto finalImage = img.reconstructImage(quantizedBlocks,huffmanCodes);    
+    
+    // PROBLEM:
+    // I HAVE A FEELING THAT IDCT IS COUNTING ON RGB VALUES A LOT
+    // THIS CAUSES THAT WHEN SHIFTING BACK INSTEAD OF CHANGING THE Y VALUE => I CHANGE THE R VALUE
+    // THAT'S WHY THE IMAGE IS COLORED RED IN A WEIRD WAY
+    // SOLUTION:
+    // ??
 
     return 0;
 }
