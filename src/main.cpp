@@ -42,9 +42,8 @@ struct EncodedPixel {
 };
 
 class HuffmanTree {
-    private:
+private:
     Node* root;
-
     // recursive generating huffman tree
     void generateCodes(Node* root, string str, map<int, string> &huffmanCodes) {
         if (!root)
@@ -99,19 +98,24 @@ public:
 
     }
 
-    int decode(const string &str, const map<int, string> &huffmanCodes) {
+    int decode(const string& str, const map<int, string>& huffmanCodes) {
         Node* curr = root;
         int decodedValue = -1;
 
+        string codeBuffer; // buffer
         for (char bit : str) {
-            if (bit == '0') {
-                curr = curr->left;
-            } else {
-                curr = curr->right;
-            }
+            codeBuffer += bit; 
 
-            if (curr->left == nullptr && curr->right == nullptr) {
-                decodedValue = curr->data;
+            for (const auto& pair : huffmanCodes) {
+                if (pair.second == codeBuffer) {
+                    decodedValue = pair.first;
+                    // resetting buffer
+                    codeBuffer.clear();
+                    break;
+                }
+            }
+            // if code found, end search
+            if (decodedValue != -1) {
                 break;
             }
         }
@@ -444,19 +448,19 @@ public:
 
                     double sumY = 0.0, sumCb = 0.0, sumCr = 0.0;
 
-                    // u frequency
-                    for (int u = 0; u < 8; ++u) {
-                        // v frequency
-                        for (int v = 0; v < 8; ++v) {
+                    // v frequency
+                    for (int v = 0; v < 8; ++v) {
+                        // u frequency
+                        for (int u = 0; u < 8; ++u) {
                             double Cu = (u == 0) ? sqrt(2.0) / 2.0 : 1.0;
                             double Cv = (v == 0) ? sqrt(2.0) / 2.0 : 1.0;
 
                             double cosineX = cos((2 * x + 1) * u * M_PI / 16.0);
                             double cosineY = cos((2 * y + 1) * v * M_PI / 16.0);
 
-                            double dctValueY = dctBlock[v][u][0];
-                            double dctValueCb = dctBlock[v][u][1];
-                            double dctValueCr = dctBlock[v][u][2];
+                            double dctValueY = dctBlock[u][v][0];
+                            double dctValueCb = dctBlock[u][v][1];
+                            double dctValueCr = dctBlock[u][v][2];
 
                             sumY += Cu * Cv * dctValueY * cosineX * cosineY;
                             sumCb += Cu * Cv * dctValueCb * cosineX * cosineY;
@@ -465,13 +469,13 @@ public:
                     }
 
                     // Discretization and rounding
-                    int Y = static_cast<int>(sumY);
-                    int Cb = static_cast<int>(sumCb);
-                    int Cr = static_cast<int>(sumCr);
+                    int Y = static_cast<int>(sumY + 0.5);
+                    int Cb = static_cast<int>(sumCb + 0.5);
+                    int Cr = static_cast<int>(sumCr + 0.5);
 
-                    Y = max(16, min(235, Y));
-                    Cb = max(16, min(240, Cb));
-                    Cr = max(16, min(240, Cr));
+                    Y = max(0, min(255, Y));
+                    Cb = max(0, min(255, Cb));
+                    Cr = max(0, min(255, Cr));
 
                     // Saving computed YCbCr values to block
                     block[y][x] = {Y, Cb, Cr};
@@ -479,6 +483,7 @@ public:
             }
             blocks.push_back(block);
         }
+
         auto img = combineBlocks(blocks);
         saveImage("../OUTPUT/06_TEST_IDCT.bmp", img);
         return blocks;
@@ -486,19 +491,26 @@ public:
 
     // shifting rgb channels instead of ycbcr?
     vector<vector<vector<array<int, 3>>>> shiftPixelValuesBack(vector<vector<vector<array<int, 3>>>> &blocks) {
-        for (auto &block : blocks) {
+        cout << "SHIFTING PIXEL VALUES BACK..." << endl;
+        vector<vector<vector<array<int, 3>>>> shiftedBlocks = blocks;
+        for (auto &block : shiftedBlocks) {
             for (auto &row : block) {
                 for (auto &pixel : row) {
-                    pixel[0] += 128;
-                    //cout << " Y: " << pixel[0]<< " Cb: " << pixel[1] << " Cr: " << pixel[2];
+                    // i dont know what im doing, sorry
+                    // for my future me, problem is here... somewhere
+                    //////////////////////////////////////////
+                    pixel[0] += 17.5;   
+                    pixel[1] += 100;
+                    pixel[2] += 100;
+                    ////////////////////////////////////////// 
                 }
             }
         }
 
-        auto img = combineBlocks(blocks);
+        auto img = combineBlocks(shiftedBlocks);
         saveImage("../OUTPUT/07_TEST_SHIFTING_BACK.bmp", img);
 
-        return blocks;
+        return shiftedBlocks;
     }
 
     vector<vector<vector<array<int, 3>>>> convertYCbCrToRGB(const vector<vector<vector<array<int, 3>>>>& blocksYCbCr) {
@@ -527,7 +539,7 @@ public:
                     G = std::max(0, std::min(255, G));
                     B = std::max(0, std::min(255, B));
 
-                    blocksRGB[i][j][k] = {R, G, B};
+                    blocksRGB[i][j][k] = {B, G, R};
                 }
             }
         }
@@ -577,7 +589,6 @@ public:
                     int decodedY = huffmanTree.decode(huffmanCodes[Y], huffmanCodes);
                     int decodedCb = huffmanTree.decode(huffmanCodes[Cb], huffmanCodes);
                     int decodedCr = huffmanTree.decode(huffmanCodes[Cr], huffmanCodes);
-                    //cout << decodedY << decodedCb << decodedCr << endl;
 
                     // Update block with decoded values
                     block[y][x] = {decodedY, decodedCb, decodedCr};
@@ -618,13 +629,6 @@ int main() {
     auto quantizedBlocks = img.quantize(dctBlocks);
     map<int, string> huffmanCodes = img.huffmanEncoding(quantizedBlocks);
     auto finalImage = img.reconstructImage(quantizedBlocks,huffmanCodes);    
-    
-    // PROBLEM:
-    // I HAVE A FEELING THAT IDCT IS COUNTING ON RGB VALUES A LOT
-    // THIS CAUSES THAT WHEN SHIFTING BACK INSTEAD OF CHANGING THE Y VALUE => I CHANGE THE R VALUE
-    // THAT'S WHY THE IMAGE IS COLORED RED IN A WEIRD WAY
-    // SOLUTION:
-    // ??
 
     return 0;
 }
