@@ -18,8 +18,10 @@
 ![quant](https://i.imgur.com/xxbjQ6Z.png)
 #### IDCT ✅
 ![idct](https://i.imgur.com/k26LIv1.png)
-#### Shifting Y value back ❌
+#### Shifting Y value back ❓
+![shiftback](https://i.imgur.com/SdXdAPy.png)
 #### Converting YCbCr back to RGB ✅
+![torgb](https://i.imgur.com/8CzoTUs.png)
 #### Huffman encoding ❓
 #### Combining blocks back to final image ✅
 
