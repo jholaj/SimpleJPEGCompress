@@ -4,7 +4,11 @@
 #include <fstream>
 #include <cmath>
 
-Image::Image(const std::string& filename) {
+Image::Image(const std::string& filename, int blockSize, double qualityFactor)
+    : blockSize(blockSize), qualityFactor(qualityFactor) {
+    if (blockSize <= 0 || qualityFactor <= 0) {
+        throw std::invalid_argument("Invalid parameter values for blockSize, JPEGConstants::COLOR_RANGE, or qualityFactor");
+    }
     DCTTransform::initializeMatrices();
     loadImage(filename);
 }
@@ -132,8 +136,8 @@ std::vector<std::vector<std::array<int, 3>>> Image::convertToYCbCr() {
 std::vector<PixelBlock> Image::divideIntoBlocks(
     const std::vector<std::vector<std::array<int, 3>>>& imageData) {
     std::vector<PixelBlock> blocks;
-    int blockCountX = (width + JPEGConstants::BLOCK_SIZE - 1) / JPEGConstants::BLOCK_SIZE;
-    int blockCountY = (height + JPEGConstants::BLOCK_SIZE - 1) / JPEGConstants::BLOCK_SIZE;
+    int blockCountX = (width + blockSize - 1) / blockSize;
+    int blockCountY = (height + blockSize - 1) / blockSize;
 
     blocks.reserve(blockCountX * blockCountY);
 
@@ -141,10 +145,10 @@ std::vector<PixelBlock> Image::divideIntoBlocks(
         for (int blockX = 0; blockX < blockCountX; ++blockX) {
             PixelBlock block;
 
-            for (int y = 0; y < JPEGConstants::BLOCK_SIZE; ++y) {
-                for (int x = 0; x < JPEGConstants::BLOCK_SIZE; ++x) {
-                    int imageX = blockX * JPEGConstants::BLOCK_SIZE + x;
-                    int imageY = blockY * JPEGConstants::BLOCK_SIZE + y;
+            for (int y = 0; y < blockSize; ++y) {
+                for (int x = 0; x < blockSize; ++x) {
+                    int imageX = blockX * blockSize + x;
+                    int imageY = blockY * blockSize + y;
 
                     if (imageX < width && imageY < height) {
                         block.data[y][x] = imageData[imageY][imageX];
@@ -185,12 +189,12 @@ std::vector<std::vector<std::array<int, 3>>> Image::convertToRGB(const std::vect
     std::vector<std::vector<std::array<int, 3>>> rgbImage(height, std::vector<std::array<int, 3>>(width));
 
     int blockIndex = 0;
-    for (int blockY = 0; blockY < height; blockY += JPEGConstants::BLOCK_SIZE) {
-        for (int blockX = 0; blockX < width; blockX += JPEGConstants::BLOCK_SIZE) {
+    for (int blockY = 0; blockY < height; blockY += blockSize) {
+        for (int blockX = 0; blockX < width; blockX += blockSize) {
             const auto& block = blocks[blockIndex++];
 
-            for (int y = 0; y < JPEGConstants::BLOCK_SIZE && (blockY + y) < height; ++y) {
-                for (int x = 0; x < JPEGConstants::BLOCK_SIZE && (blockX + x) < width; ++x) {
+            for (int y = 0; y < blockSize && (blockY + y) < height; ++y) {
+                for (int x = 0; x < blockSize && (blockX + x) < width; ++x) {
                     int imageY = blockY + y;
                     int imageX = blockX + x;
 
@@ -216,32 +220,32 @@ std::vector<std::vector<std::array<int, 3>>> Image::convertToRGB(const std::vect
 }
 
 void Image::quantize(PixelBlock& block) {
-    for (int i = 0; i < JPEGConstants::BLOCK_SIZE; ++i) {
-        for (int j = 0; j < JPEGConstants::BLOCK_SIZE; ++j) {
+    for (int i = 0; i < blockSize; ++i) {
+        for (int j = 0; j < blockSize; ++j) {
             // Luminance quantization
             block.data[i][j][0] = std::round(block.data[i][j][0] /
-                (JPEGConstants::LUMINANCE_QUANT_MATRIX[i][j] * JPEGConstants::QUALITY_FACTOR));
+                (JPEGConstants::LUMINANCE_QUANT_MATRIX[i][j] * qualityFactor));
 
             // Chrominance quantization
             for (int c = 1; c < 3; ++c) {
                 block.data[i][j][c] = std::round(block.data[i][j][c] /
-                    (JPEGConstants::CHROMINANCE_QUANT_MATRIX[i][j] * JPEGConstants::QUALITY_FACTOR));
+                    (JPEGConstants::CHROMINANCE_QUANT_MATRIX[i][j] * qualityFactor));
             }
         }
     }
 }
 
 void Image::dequantize(PixelBlock& block) {
-    for (int i = 0; i < JPEGConstants::BLOCK_SIZE; ++i) {
-        for (int j = 0; j < JPEGConstants::BLOCK_SIZE; ++j) {
+    for (int i = 0; i < blockSize; ++i) {
+        for (int j = 0; j < blockSize; ++j) {
             // Luminance dequantization
             block.data[i][j][0] = std::round(block.data[i][j][0] *
-                (JPEGConstants::LUMINANCE_QUANT_MATRIX[i][j] * JPEGConstants::QUALITY_FACTOR));
+                (JPEGConstants::LUMINANCE_QUANT_MATRIX[i][j] * qualityFactor));
 
             // Chrominance dequantization
             for (int c = 1; c < 3; ++c) {
                 block.data[i][j][c] = std::round(block.data[i][j][c] *
-                    (JPEGConstants::CHROMINANCE_QUANT_MATRIX[i][j] * JPEGConstants::QUALITY_FACTOR));
+                    (JPEGConstants::CHROMINANCE_QUANT_MATRIX[i][j] * qualityFactor));
             }
         }
     }
@@ -257,10 +261,10 @@ std::map<int, std::string> Image::huffmanEncode(const std::vector<PixelBlock>& b
 
     // Calculate frequencies
     for (const auto& block : blocks) {
-        for (int i = 0; i < JPEGConstants::BLOCK_SIZE; ++i) {
-            for (int j = 0; j < JPEGConstants::BLOCK_SIZE; ++j) {
+        for (int i = 0; i < blockSize; ++i) {
+            for (int j = 0; j < blockSize; ++j) {
                 for (int c = 0; c < 3; ++c) {
-                    int value = clamp(block.data[i][j][c], 0, 255);
+                    int value = clamp(block.data[i][j][c], 0, JPEGConstants::COLOR_RANGE - 1);
                     frequencies[value]++;
                 }
             }

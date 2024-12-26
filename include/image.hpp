@@ -8,13 +8,13 @@
 
 class Image {
 public:
-    explicit Image(const std::string& filename);
+    explicit Image(const std::string& filename, int blockSize, double qualityFactor);
     static int clamp(int value, int min, int max);
     void compressImage(const std::string& outputFilename);
 
 private:
-    int width, height;
-    std::vector<std::vector<std::array<int, 3>>> pixels;
+    int width, height, blockSize;
+    double qualityFactor;
 
     void loadImage(const std::string& filename);
     void saveImage(const std::string& filename,
@@ -28,4 +28,5 @@ private:
     void dequantize(PixelBlock& block);
     std::map<int, std::string> huffmanEncode(const std::vector<PixelBlock>& blocks);
 
+    std::vector<std::vector<std::array<int, 3>>> pixels;
 };
